@@ -1,0 +1,115 @@
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+import scipy.stats as st
+from scipy.stats import skew
+from sklearn.metrics import mean_squared_error, r2_score, mean_squared_log_error, r2_score
+from sklearn.ensemble import RandomForestRegressor
+from sklearn import ensemble
+from math import sqrt
+from sklearn.model_selection import train_test_split
+import csv
+import os
+
+
+train=pd.read_csv(r"C:\\Users\\ajodo\Desktop\train.csv")
+for col in train.columns: 
+    print(col) 
+
+y=train["SalePrice"]
+X = train.drop(["SalePrice"], axis=1)
+X_train, X_test, y_train, y_test = train_test_split(X, y,test_size = .20, random_state = 0)
+X_train.shape, y_train.shape, X_test.shape, y_test.shape
+
+
+train.describe().T
+
+train.describe()
+
+train.info()
+
+corr = train.corr()
+corr.sort_values(["SalePrice"], ascending = False, inplace = True)#
+print(corr.SalePrice)
+
+ax = plt.subplots(ncols=1, figsize=(10,10))
+corr_matrix = train.corr()
+mask = np.zeros_like(corr_matrix)
+mask[np.triu_indices_from(mask)] = True
+sns.heatmap(corr_matrix, mask=mask, vmin = -1, vmax = 1, center = 0);
+plt.show()
+
+sns.distplot(train['SalePrice'], color="b");
+plt.show()
+
+Log_Y = train['SalePrice']
+sns.distplot(np.log10(Log_Y), color="c");
+plt.show()
+
+
+X['MSSubClass'] = X['MSSubClass'].apply(str)
+X['YrSold'] = X['YrSold'].astype(str)
+X['MoSold'] = X['MoSold'].astype(str)
+X['YearRemodAdd'] = X['YearRemodAdd'].astype(str)
+X = X.drop(["Id"], axis=1)
+
+
+missingdata = (X.isnull().sum() / len(X)) * 100
+print(missingdata)
+
+quantitative = [f for f in X.columns if X.dtypes[f] != 'object']
+qualitative = [f for f in X.columns if X.dtypes[f] == 'object']
+
+#Fill missing values for quantitative variables
+for i in quantitative:
+    X.fillna(X.median(), inplace = True)
+    #print(i, train[i].median())
+    
+#Fill missing values for special variables
+spec_categ_col =['PoolArea', 'Fence', 'MiscFeature', 'Alley','FireplaceQu']
+for i in spec_categ_col:
+    X[i] = X[i].fillna('None')
+    
+#Fill missing values for categorical variables
+for i in qualitative:
+    X[i].fillna(X[i].mode()[0], inplace = True)
+  
+
+X.skew(axis = 0, skipna = True).sort_values(ascending=False)
+
+Num = 1
+if Num <= 1:
+    X["LotArea"] = np.log1p(X["LotArea"])
+    X["LotFrontage"] = np.log1p(X["LotFrontage"])
+    X["GrLivArea"] = np.log1p(X["GrLivArea"])
+else:
+    num_feats = X.dtypes[X.dtypes != "object"].index
+    skewed_feats =X[num_feats].apply(lambda x: skew(x.dropna())).sort_values(ascending=False)
+    skewed_feats = skewed_feats[skewed_feats > 0.75]
+    skewed_feats = skewed_feats.index
+    skewed_feats
+    X[skewed_feats] = np.log1p(X[skewed_feats])
+
+
+#Total Floor area of entire house
+X['TotalSF']=X['TotalBsmtSF']+ X['1stFlrSF']+ X['2ndFlrSF']
+#Total number of baths
+X['TotalBath'] = (X['FullBath'] + (0.5 * X['HalfBath']) + X['BsmtFullBath'] + (0.5 * train['BsmtHalfBath']))
+#Total porch area
+X['TotalPorchSF'] = X['OpenPorchSF'] + X['3SsnPorch'] + X['EnclosedPorch'] + train['ScreenPorch']+ train['WoodDeckSF']
+
+
+X = pd.get_dummies(data=X)
+
+forest_model = RandomForestRegressor(random_state=10, n_estimators=3000)
+forest_model.fit(X,y)
+forest_train = forest_model.predict(X)
+
+
+#RMSE
+print(np.sqrt(mean_squared_error(y,forest_train)))
+#Accuracy 
+print(r2_score(y, forest_train))
+
+
